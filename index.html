@@ -1,0 +1,283 @@
+<html><head><base href="https://websim.example.com/image-classifier/">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Image Classifier with Feedback and Drag-and-Drop</title>
+<style>
+    body {
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 20px;
+        background-color: #f5f5f5;
+        color: #333;
+    }
+    .container {
+        background-color: white;
+        padding: 30px;
+        border-radius: 15px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+    h1 {
+        color: #2c3e50;
+        text-align: center;
+        margin-bottom: 30px;
+    }
+    #imagePreview {
+        max-width: 100%;
+        height: auto;
+        margin-bottom: 20px;
+        border-radius: 10px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    #result, #feedbackForm {
+        margin-top: 20px;
+    }
+    button {
+        background-color: #3498db;
+        border: none;
+        color: white;
+        padding: 12px 24px;
+        text-align: center;
+        text-decoration: none;
+        display: inline-block;
+        font-size: 16px;
+        margin: 4px 2px;
+        cursor: pointer;
+        border-radius: 5px;
+        transition: background-color 0.3s ease;
+    }
+    button:hover {
+        background-color: #2980b9;
+    }
+    #correctButton {
+        background-color: #2ecc71;
+    }
+    #correctButton:hover {
+        background-color: #27ae60;
+    }
+    #incorrectButton {
+        background-color: #e74c3c;
+    }
+    #incorrectButton:hover {
+        background-color: #c0392b;
+    }
+    input[type="file"] {
+        display: none;
+    }
+    .file-upload {
+        border: 2px solid #3498db;
+        border-radius: 5px;
+        padding: 10px 20px;
+        display: inline-block;
+        cursor: pointer;
+        color: #3498db;
+        font-weight: bold;
+        transition: all 0.3s ease;
+    }
+    .file-upload:hover {
+        background-color: #3498db;
+        color: white;
+    }
+    input[type="text"] {
+        width: 100%;
+        padding: 12px;
+        font-size: 16px;
+        border-radius: 5px;
+        border: 1px solid #bdc3c7;
+        box-sizing: border-box;
+        margin-bottom: 10px;
+    }
+    #loading {
+        display: none;
+        text-align: center;
+        font-weight: bold;
+        margin-top: 20px;
+        color: #3498db;
+    }
+    .lds-ring {
+        display: inline-block;
+        position: relative;
+        width: 80px;
+        height: 80px;
+    }
+    .lds-ring div {
+        box-sizing: border-box;
+        display: block;
+        position: absolute;
+        width: 64px;
+        height: 64px;
+        margin: 8px;
+        border: 8px solid #3498db;
+        border-radius: 50%;
+        animation: lds-ring 1.2s cubic-bezier(0.5, 0, 0.5, 1) infinite;
+        border-color: #3498db transparent transparent transparent;
+    }
+    .lds-ring div:nth-child(1) {
+        animation-delay: -0.45s;
+    }
+    .lds-ring div:nth-child(2) {
+        animation-delay: -0.3s;
+    }
+    .lds-ring div:nth-child(3) {
+        animation-delay: -0.15s;
+    }
+    @keyframes lds-ring {
+        0% {
+            transform: rotate(0deg);
+        }
+        100% {
+            transform: rotate(360deg);
+        }
+    }
+    #dropZone {
+        border: 3px dashed #3498db;
+        border-radius: 10px;
+        padding: 30px;
+        text-align: center;
+        color: #3498db;
+        font-size: 18px;
+        margin-bottom: 20px;
+        transition: all 0.3s ease;
+    }
+    #dropZone.dragover {
+        background-color: rgba(52, 152, 219, 0.1);
+        border-color: #2980b9;
+    }
+</style>
+</head>
+<body>
+<div class="container">
+    <h1>Image Classifier with Feedback</h1>
+    <div id="dropZone">
+        拖曳圖片到此處或點擊選擇文件
+        <input type="file" id="imageInput" accept="image/*">
+    </div>
+    <img id="imagePreview" src="" alt="Uploaded image preview">
+    <div id="loading">
+        <div class="lds-ring"><div></div><div></div><div></div><div></div></div>
+        <p>正在載入模型並分類圖像...</p>
+    </div>
+    <div id="result"></div>
+    <button id="correctButton">正確</button>
+    <button id="incorrectButton">錯誤</button>
+    <div id="feedbackForm" style="display:none;">
+        <h3>請輸入正確的 class：</h3>
+        <input type="text" id="correctClass" placeholder="輸入正確的 class">
+        <button id="submitFeedback">提交反饋</button>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet"></script>
+<script>
+let model;
+let currentPrediction;
+
+async function loadModel() {
+    model = await mobilenet.load();
+    console.log('Model loaded');
+}
+
+// Load the model when the page loads
+window.addEventListener('load', loadModel);
+
+async function classifyImage(img) {
+    if (!model) {
+        console.log('Model not loaded yet, waiting...');
+        await loadModel();
+    }
+    const predictions = await model.classify(img);
+    return predictions[0];
+}
+
+function handleImage(file) {
+    const img = document.getElementById('imagePreview');
+    img.src = URL.createObjectURL(file);
+    
+    const loadingDiv = document.getElementById('loading');
+    loadingDiv.style.display = 'block';
+    
+    img.onload = async () => {
+        try {
+            currentPrediction = await classifyImage(img);
+            document.getElementById('result').innerHTML = `
+                <h3>預測結果:</h3>
+                <p><strong>${currentPrediction.className}</strong></p>
+                <p>置信度: ${(currentPrediction.probability * 100).toFixed(2)}%</p>
+            `;
+        } catch (error) {
+            console.error('Error classifying image:', error);
+            document.getElementById('result').innerHTML = '<p style="color: #e74c3c;">圖像分類出錯，請重試。</p>';
+        } finally {
+            loadingDiv.style.display = 'none';
+        }
+    }
+}
+
+document.getElementById('imageInput').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (file) {
+        handleImage(file);
+    }
+});
+
+const dropZone = document.getElementById('dropZone');
+
+dropZone.addEventListener('click', () => {
+    document.getElementById('imageInput').click();
+});
+
+dropZone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    dropZone.classList.add('dragover');
+});
+
+dropZone.addEventListener('dragleave', () => {
+    dropZone.classList.remove('dragover');
+});
+
+dropZone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dropZone.classList.remove('dragover');
+    const file = e.dataTransfer.files[0];
+    if (file && file.type.startsWith('image/')) {
+        handleImage(file);
+    } else {
+        alert('請上傳有效的圖片文件');
+    }
+});
+
+document.getElementById('correctButton').addEventListener('click', () => {
+    alert('感謝您的反饋！模型預測正確。');
+});
+
+document.getElementById('incorrectButton').addEventListener('click', () => {
+    document.getElementById('feedbackForm').style.display = 'block';
+});
+
+document.getElementById('submitFeedback').addEventListener('click', () => {
+    const correctClass = document.getElementById('correctClass').value;
+    if (correctClass.trim() === '') {
+        alert('請輸入正確的 class');
+        return;
+    }
+    
+    // 模擬更新模型的預測結果
+    currentPrediction.className = correctClass;
+    currentPrediction.probability = 1.0; // 假設用戶提供的標籤是 100% 準確的
+
+    // 更新顯示的結果
+    document.getElementById('result').innerHTML = `
+        <h3>修正後的預測結果:</h3>
+        <p><strong>${currentPrediction.className}</strong></p>
+        <p>置信度: ${(currentPrediction.probability * 100).toFixed(2)}%</p>
+    `;
+
+    alert(`感謝您的反饋！您提供的正確 class 是：${correctClass}`);
+    // 這裡可以添加將反饋發送到伺服器的代碼
+    document.getElementById('feedbackForm').style.display = 'none';
+    document.getElementById('correctClass').value = ''; // 清空輸入框
+});
+</script>
+</body>
+</html>
